@@ -10,10 +10,34 @@
 
 // Set of 3D points to form a triangle
 // All values (x, y, z) between -1 and 1
+// float vertices[] = {
+//     -0.5f, -0.5f, 0.0f,
+//      0.5f, -0.5f, 0.0f,
+//      0.0f,  0.5f, 0.0f
+// };
+
+// To display two triangles, lots of overlap though
+// float vertices2[] = {
+//     // first triangle
+//      0.5f,  0.5f, 0.0f,  // top right
+//      0.5f, -0.5f, 0.0f,  // bottom right
+//     -0.5f,  0.5f, 0.0f,  // top left
+//     // second triangle
+//      0.5f, -0.5f, 0.0f,  // bottom right
+//     -0.5f, -0.5f, 0.0f,  // bottom left
+//     -0.5f,  0.5f, 0.0f   // top left
+// };
+// Only unique vertices for two triangles
 float vertices[] = {
-    -0.5f, -0.5f, 0.0f,
-     0.5f, -0.5f, 0.0f,
-     0.0f,  0.5f, 0.0f
+     0.5f,  0.5f, 0.0f,  // top right
+     0.5f, -0.5f, 0.0f,  // bottom right
+    -0.5f, -0.5f, 0.0f,  // bottom left
+    -0.5f,  0.5f, 0.0f   // top left
+};
+// For EBO
+unsigned int indices[] = {  // note that we start from 0!
+    0, 1, 3,   // first triangle
+    1, 2, 3    // second triangle
 };
 
 // Simplest vertex shader
@@ -136,6 +160,20 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+
+    glBindVertexArray(VAO);
+
+    unsigned int EBO;
+    glGenBuffers(1, &EBO);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    // 4. then set the vertex attributes pointers
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
     // Render loop
     while(!glfwWindowShouldClose(window))
     {
@@ -145,7 +183,10 @@ int main()
         // Use shader program
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        // glDrawArrays(GL_TRIANGLES, 0, 3);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
         // Swaps color buffer that is used to render this render iteration and show it as
         // output to the screen
