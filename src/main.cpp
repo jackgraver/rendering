@@ -97,7 +97,7 @@ int main()
     // Fragment shader setup, same as vertex
     unsigned int fragmentShader;
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL)
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 
     // Shader program object
     unsigned int shaderProgram;
@@ -107,16 +107,46 @@ int main()
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
 
-    // Use shader program
-    glUseProgram(shaderProgram);
-
     // Clean up shader objects as dont need after linked to program
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    // Need to detail vertex data structure
+    // Vertex buffer data is 3 32-bit (4 byte) floating point values, with 3 vertices defined
+    // which are packed together tightly in the array
+    // 1st - Which vertex attribute we want to configure. In vertex shader we specified
+    //       the location of the position vertex with layout (location = 0)
+    // 2nd - Size of vertex attribute (vec3 so 3 values)
+    // 3rd - Type of data which is float
+    // 4th - Specify if we want data to be normalized
+    // 5th - Stride, space between consecutive vertex attributes. So 3 times the size of float
+    // 6th - Offset, required type is void* so need to cast
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // Enable vertex attribute with vertex attribute location as arg. Vertex attributes disabled by default
+    glEnableVertexAttribArray(0);
+
+
+    // Create Vertex Array Object
+    unsigned int VAO;
+    glGenVertexArrays(1, &VAO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
     // Render loop
     while(!glfwWindowShouldClose(window))
     {
+        glClearColor(0.2f, 0.3f, 0.3f, 0.1f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Use shader program
+        glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
         // Swaps color buffer that is used to render this render iteration and show it as
         // output to the screen
         glfwSwapBuffers(window);
