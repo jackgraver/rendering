@@ -4,61 +4,32 @@
 // Library for OpenGL, bare necessities required for rendeirng to screen.
 //  Helps create OpenGL context, define window parameters and handle user input
 #include <GLFW/glfw3.h>
+// GLM (OpenGL Mathematics) is header-only library supporting vector, matrix and other math operations
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
+#include "stb_image.h"
 
-#include "main.h"
+#include "shader.h"
 
-// Set of 3D points to form a triangle
-// All values (x, y, z) between -1 and 1
-// float vertices[] = {
-//     -0.5f, -0.5f, 0.0f,
-//      0.5f, -0.5f, 0.0f,
-//      0.0f,  0.5f, 0.0f
-// };
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_float4x4.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include "glm/trigonometric.hpp"
 
-// To display two triangles, lots of overlap though
-// float vertices2[] = {
-//     // first triangle
-//      0.5f,  0.5f, 0.0f,  // top right
-//      0.5f, -0.5f, 0.0f,  // bottom right
-//     -0.5f,  0.5f, 0.0f,  // top left
-//     // second triangle
-//      0.5f, -0.5f, 0.0f,  // bottom right
-//     -0.5f, -0.5f, 0.0f,  // bottom left
-//     -0.5f,  0.5f, 0.0f   // top left
-// };
-// Only unique vertices for two triangles
-float vertices[] = {
-     0.5f,  0.5f, 0.0f,  // top right
-     0.5f, -0.5f, 0.0f,  // bottom right
-    -0.5f, -0.5f, 0.0f,  // bottom left
-    -0.5f,  0.5f, 0.0f   // top left
-};
-// For EBO
-unsigned int indices[] = {  // note that we start from 0!
-    0, 1, 3,   // first triangle
-    1, 2, 3    // second triangle
-};
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void processInput(GLFWwindow *window);
 
-// Simplest vertex shader
-// No processing just forwards input data to shader output
-const char *vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-
-// Fragment shader
-const char *fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "void main()\n"
-    "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-    "}\0";
+const unsigned int SCR_WIDTH = 800;
+const unsigned int SCR_HEIGHT = 600;
 
 int main()
 {
+    // -------------------------------------------------------------------
+    // Actual setup of OpenGL for creating window and supporting libraries
+    // -------------------------------------------------------------------
     glfwInit();
     // Configuring glfw, first param specifies what we are configuring & 2nd is value
     // - Options from large enum all prefixed by GLFW_
@@ -66,7 +37,9 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // Tell using major OpenGL version 3
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3); // Tell using minor OpenGL version 3
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //Tell using Core-profile
-    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#ifdef  __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
 
     // Window object, width and height specified first
     GLFWwindow* window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
@@ -77,6 +50,8 @@ int main()
         return -1;
     }
     glfwMakeContextCurrent(window);
+    // Resize handler
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     // Initialize GLAD before any OpenGL function calls
     // - Pass function to load address of OpenGL function pointers (OS-specific)
@@ -86,107 +61,153 @@ int main()
         return -1;
     }
 
-    // Size of rendering window, specifies region inside window OpenGL should render to
-    glViewport(0, 0, 800, 600);
+    glEnable(GL_DEPTH_TEST);
 
-    // Resize handler
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    // Load and validate our vertex and fragment shaders
+    Shader ourShader("src/vert_shader.glsl", "src/frag_shader.glsl");
 
-    // Vertex buffer object, OpenGL object with unique ID
-    unsigned int VBO;
+    float vertices[] = {
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+    };
+    // world space positions of our cubes
+    glm::vec3 cubePositions[] = {
+        glm::vec3( 0.0f,  0.0f,  0.0f),
+        glm::vec3( 2.0f,  5.0f, -15.0f),
+        glm::vec3(-1.5f, -2.2f, -2.5f),
+        glm::vec3(-3.8f, -2.0f, -12.3f),
+        glm::vec3( 2.4f, -0.4f, -3.5f),
+        glm::vec3(-1.7f,  3.0f, -7.5f),
+        glm::vec3( 1.3f, -2.0f, -2.5f),
+        glm::vec3( 1.5f,  2.0f, -2.5f),
+        glm::vec3( 1.5f,  0.2f, -1.5f),
+        glm::vec3(-1.3f,  1.0f, -1.5f)
+    };
+
+    // Create Vertex Buffer, Vertex Array and Element Buffer Objects
+    unsigned int VBO, VAO;
+    // genBuffers & glGenVertexArrays
+    // 1st - size: number of objects to generate
+    // 2nd - buffers
     glGenBuffers(1, &VBO);
-    // Bind to vertex buffer type
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    // Copies vertex data into buffer memory
-    // - 1st - Buffer to copy to
-    // - 2nd - Size of data
-    // - 3rd Actual data
-    // - How graphics card should manage data
-    // -- GL_STREAM_DRAW: the data is set only once and used by the GPU at most a few times.
-    // -- GL_STATIC_DRAW: the data is set only once and used many times.
-    // -- GL_DYNAMIC_DRAW: the data is changed a lot and used many times. (places in memory that allows faster writes)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // Create OpenGL Shader Object, referenced by ID
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER); // Use GL_VERTEX_SHADER to specify vertex
-    // Attach shader source code to shader object
-    // - 1st - Shader object to compile to
-    // - 2nd - How many strings passing as source code
-    // - 3rd - Source code
-    // - 4th - Just null for now
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader); // and compile
-
-    // Fragment shader setup, same as vertex
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-
-    // Shader program object
-    unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-    // Attach compiled shaders to program object and link them
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    // Clean up shader objects as dont need after linked to program
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    // Need to detail vertex data structure
-    // Vertex buffer data is 3 32-bit (4 byte) floating point values, with 3 vertices defined
-    // which are packed together tightly in the array
-    // 1st - Which vertex attribute we want to configure. In vertex shader we specified
-    //       the location of the position vertex with layout (location = 0)
-    // 2nd - Size of vertex attribute (vec3 so 3 values)
-    // 3rd - Type of data which is float
-    // 4th - Specify if we want data to be normalized
-    // 5th - Stride, space between consecutive vertex attributes. So 3 times the size of float
-    // 6th - Offset, required type is void* so need to cast
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    // Enable vertex attribute with vertex attribute location as arg. Vertex attributes disabled by default
-    glEnableVertexAttribArray(0);
-
-
-    // Create Vertex Array Object
-    unsigned int VAO;
     glGenVertexArrays(1, &VAO);
 
+    // Bind VAO
     glBindVertexArray(VAO);
+
+    // Bind VBO and move vertex data to buffer
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+    // Texture coord atribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
+    unsigned int texture;
 
-    glBindVertexArray(VAO);
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // load image, create texture and generate mipmaps
+    int width, height, nrChannels;
+    stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
+    unsigned char *data = stbi_load("resources/textures/container.jpg", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load texture" << std::endl;
+    }
+    stbi_image_free(data);
 
-    unsigned int EBO;
-    glGenBuffers(1, &EBO);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    // 4. then set the vertex attributes pointers
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+    ourShader.use();
+    ourShader.setInt("texture", 0);
 
     // Render loop
     while(!glfwWindowShouldClose(window))
     {
-        glClearColor(0.2f, 0.3f, 0.3f, 0.1f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        processInput(window);
 
-        // Use shader program
-        glUseProgram(shaderProgram);
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        ourShader.use();
+
+        // create transformations
+        glm::mat4 view          = glm::mat4(1.0f);
+        glm::mat4 projection    = glm::mat4(1.0f);
+        view  = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+        // note: currently we set the projection matrix each frame, but since the projection matrix rarely changes it's often best practice to set it outside the main loop only once.
+        ourShader.setMat4("projection", projection);
+        ourShader.setMat4("view", view);
+
+        // render container
         glBindVertexArray(VAO);
-        // glDrawArrays(GL_TRIANGLES, 0, 3);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+        for (unsigned int i = 0; i < 10; i++) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, cubePositions[i]);
+            float angle = 20.0f * i;
+            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            ourShader.setMat4("model", model);
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
 
         // Swaps color buffer that is used to render this render iteration and show it as
         // output to the screen
@@ -195,12 +216,21 @@ int main()
         // calls corresponding functions (which we can register via callback methods)
         glfwPollEvents();
     }
-    glfwTerminate();
 
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+
+    glfwTerminate();
     return 0;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
+}
+
+void processInput(GLFWwindow *window)
+{
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
 }
