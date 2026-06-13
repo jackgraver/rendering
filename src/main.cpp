@@ -15,12 +15,24 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 
+/*
+ *
+ * Local space (where vertices are in relation to each other for the object as a whole)
+ * ->
+ * World space (where models get tranformations applied (scale, rotation, translation) so now sets of vertices and entire objects are different for all existing objects)
+ * ->
+ * View space (move visible objects into coordinates for a given camera that is looking down negative z axis at origin)
+ * ->
+ * Following are transformations for clipping and NDC
+ *
+ */
+
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 4.0f, 3.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -30,7 +42,13 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 // lighting
-glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+glm::vec3 lightPos(5.2f, 5.0f, 8.0f);
+
+constexpr unsigned CHUNK_COLS = 4;
+constexpr unsigned CHUNK_ROWS = 4;
+constexpr unsigned CHUNK_HEIGHT = 4;
+
+constexpr unsigned CHUNK_SIZE = CHUNK_ROWS * CHUNK_ROWS * CHUNK_HEIGHT;
 
 int main()
 {
@@ -124,6 +142,34 @@ int main()
         -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
+    // glm::vec3 cubePositions[] = {
+    //     glm::vec3( 0.0f,  0.0f,  0.0f),
+    //     glm::vec3( 2.0f,  5.0f, -15.0f),
+    //     glm::vec3(-1.5f, -2.2f, -2.5f),
+    //     glm::vec3(-3.8f, -2.0f, -12.3f),
+    //     glm::vec3( 2.4f, -0.4f, -3.5f),
+    //     glm::vec3(-1.7f,  3.0f, -7.5f),
+    //     glm::vec3( 1.3f, -2.0f, -2.5f),
+    //     glm::vec3( 1.5f,  2.0f, -2.5f),
+    //     glm::vec3( 1.5f,  0.2f, -1.5f),
+    //     glm::vec3(-1.3f,  1.0f, -1.5f)
+    // };
+
+    glm::vec3 chunk[CHUNK_SIZE];
+    // = {
+    //     glm::vec3( 0.0f,  0.0f,  0.0f),
+    //     glm::vec3( 1.0f,  0.0f,  0.0f),
+    //     glm::vec3( 2.0f,  -1.0f,  0.0f),
+    // };
+    for (unsigned i = 0; i < CHUNK_ROWS; i++) {
+        for (unsigned j = 0; j < CHUNK_COLS; j++) {
+            for (unsigned k = 0; k < CHUNK_HEIGHT; k++) {
+                unsigned index = i + 4 * (j + 4 * k);
+                chunk[index] = glm::vec3((float)i, -1 * (float)j, (float)k);
+            }
+        }
+    }
+
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
     glGenVertexArrays(1, &cubeVAO);
@@ -151,7 +197,6 @@ int main()
     // note that we update the lamp's position attribute's stride to reflect the updated buffer data
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-
 
     // render loop
     // -----------
@@ -191,7 +236,15 @@ int main()
 
         // render the cube
         glBindVertexArray(cubeVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        for (unsigned int i = 0; i < CHUNK_SIZE; i++) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, chunk[i]);
+            float angle = 20.0f * i;
+            // model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            lightingShader.setMat4("model", model);
+
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
 
 
         // also draw the lamp object
