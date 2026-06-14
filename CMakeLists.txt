@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 
 project(OpenGL)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
 add_subdirectory(external/glfw-3.4)
 
 add_executable(

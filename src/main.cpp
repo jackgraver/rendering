@@ -9,11 +9,18 @@
 #include "camera.h"
 
 #include <iostream>
+#include <cstdlib>
+
+#include "world.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
+
+void print(std::string message) {
+    std::cout << message << std::endl;
+}
 
 /*
  *
@@ -28,8 +35,8 @@ void processInput(GLFWwindow *window);
  */
 
 // settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 1200;
+const unsigned int SCR_HEIGHT = 800;
 
 // camera
 Camera camera(glm::vec3(0.0f, 4.0f, 3.0f));
@@ -43,12 +50,6 @@ float lastFrame = 0.0f;
 
 // lighting
 glm::vec3 lightPos(5.2f, 5.0f, 8.0f);
-
-constexpr unsigned CHUNK_COLS = 4;
-constexpr unsigned CHUNK_ROWS = 4;
-constexpr unsigned CHUNK_HEIGHT = 4;
-
-constexpr unsigned CHUNK_SIZE = CHUNK_ROWS * CHUNK_ROWS * CHUNK_HEIGHT;
 
 int main()
 {
@@ -94,8 +95,8 @@ int main()
 
     // build and compile our shader zprogram
     // ------------------------------------
-    Shader lightingShader("src/lighting_vert.glsl", "src/lighting_frag.glsl");
-    Shader lightCubeShader("src/light_vert.glsl", "src/light_frag.glsl");
+    Shader lightingShader("src/shaders/lighting_vert.glsl", "src/shaders/lighting_frag.glsl");
+    Shader lightCubeShader("src/shaders/light_vert.glsl", "src/shaders/light_frag.glsl");
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -142,30 +143,15 @@ int main()
         -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
-    // glm::vec3 cubePositions[] = {
-    //     glm::vec3( 0.0f,  0.0f,  0.0f),
-    //     glm::vec3( 2.0f,  5.0f, -15.0f),
-    //     glm::vec3(-1.5f, -2.2f, -2.5f),
-    //     glm::vec3(-3.8f, -2.0f, -12.3f),
-    //     glm::vec3( 2.4f, -0.4f, -3.5f),
-    //     glm::vec3(-1.7f,  3.0f, -7.5f),
-    //     glm::vec3( 1.3f, -2.0f, -2.5f),
-    //     glm::vec3( 1.5f,  2.0f, -2.5f),
-    //     glm::vec3( 1.5f,  0.2f, -1.5f),
-    //     glm::vec3(-1.3f,  1.0f, -1.5f)
-    // };
 
-    glm::vec3 chunk[CHUNK_SIZE];
-    // = {
-    //     glm::vec3( 0.0f,  0.0f,  0.0f),
-    //     glm::vec3( 1.0f,  0.0f,  0.0f),
-    //     glm::vec3( 2.0f,  -1.0f,  0.0f),
-    // };
-    for (unsigned i = 0; i < CHUNK_ROWS; i++) {
-        for (unsigned j = 0; j < CHUNK_COLS; j++) {
-            for (unsigned k = 0; k < CHUNK_HEIGHT; k++) {
-                unsigned index = i + 4 * (j + 4 * k);
-                chunk[index] = glm::vec3((float)i, -1 * (float)j, (float)k);
+    World world;
+    for (int x = 0; x < World::SIZE; x++) {
+        for (int y = 0; y < World::SIZE; y++) {
+            for (int z = 0; z < World::SIZE; z++) {
+
+                int index = x + World::SIZE * (y + World::SIZE * z);
+
+                world.chunks[index] = Chunk(x, y, z);
             }
         }
     }
@@ -236,15 +222,25 @@ int main()
 
         // render the cube
         glBindVertexArray(cubeVAO);
-        for (unsigned int i = 0; i < CHUNK_SIZE; i++) {
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, chunk[i]);
-            float angle = 20.0f * i;
-            // model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-            lightingShader.setMat4("model", model);
-
-            glDrawArrays(GL_TRIANGLES, 0, 36);
+        for (Chunk& chunk : world.chunks) {
+            chunk.drawChunk(&lightingShader);
         }
+
+
+        // for (unsigned int cI = 0; cI < 8; cI++) {
+        //     Chunk& c = chunks[cI];
+        //     for (unsigned int i = 0; i < CHUNK_SIZE; i++) {
+        //         if (c.blocks[i].type == AIR) {
+        //             continue;
+        //         }
+        //         glm::mat4 model = glm::mat4(1.0f);
+        //         model = glm::translate(model, c.blocks[i].position);
+        //         lightingShader.setMat4("model", model);
+
+        //         glDrawArrays(GL_TRIANGLES, 0, 36);
+        //     }
+        // }
+
 
 
         // also draw the lamp object
