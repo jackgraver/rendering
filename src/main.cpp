@@ -18,10 +18,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 
-void print(std::string message) {
-    std::cout << message << std::endl;
-}
-
 /*
  *
  * Local space (where vertices are in relation to each other for the object as a whole)
@@ -34,8 +30,7 @@ void print(std::string message) {
  *
  */
 
-// settings
-const unsigned int SCR_WIDTH = 1200;
+const unsigned int SCR_WIDTH = 1400;
 const unsigned int SCR_HEIGHT = 800;
 
 // camera
@@ -49,7 +44,7 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 // lighting
-glm::vec3 lightPos(5.2f, 5.0f, 8.0f);
+glm::vec3 lightPos(5.2f, 15.0f, 8.0f);
 
 int main()
 {
@@ -96,7 +91,13 @@ int main()
     // build and compile our shader zprogram
     // ------------------------------------
     Shader lightingShader("src/shaders/lighting_vert.glsl", "src/shaders/lighting_frag.glsl");
+    if (!lightingShader.valid) {
+        return 0;
+    }
     Shader lightCubeShader("src/shaders/light_vert.glsl", "src/shaders/light_frag.glsl");
+    if (!lightCubeShader.valid) {
+        return 0;
+    }
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -184,6 +185,8 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -205,7 +208,7 @@ int main()
 
         // be sure to activate shader when setting uniforms/drawing objects
         lightingShader.use();
-        lightingShader.setVec3("objectColor", 1.0f, 0.5f, 0.31f);
+        // lightingShader.setVec3("objectColor", 0.39f, 0.25f, 0.09f);
         lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
         lightingShader.setVec3("lightPos", lightPos);
         lightingShader.setVec3("viewPos", camera.Position);
@@ -225,23 +228,6 @@ int main()
         for (Chunk& chunk : world.chunks) {
             chunk.drawChunk(&lightingShader);
         }
-
-
-        // for (unsigned int cI = 0; cI < 8; cI++) {
-        //     Chunk& c = chunks[cI];
-        //     for (unsigned int i = 0; i < CHUNK_SIZE; i++) {
-        //         if (c.blocks[i].type == AIR) {
-        //             continue;
-        //         }
-        //         glm::mat4 model = glm::mat4(1.0f);
-        //         model = glm::translate(model, c.blocks[i].position);
-        //         lightingShader.setMat4("model", model);
-
-        //         glDrawArrays(GL_TRIANGLES, 0, 36);
-        //     }
-        // }
-
-
 
         // also draw the lamp object
         lightCubeShader.use();
@@ -267,6 +253,10 @@ int main()
     glDeleteVertexArrays(1, &cubeVAO);
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteBuffers(1, &VBO);
+
+    for (Chunk& chunk : world.chunks) {
+        chunk.releaseGpuResources();
+    }
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------

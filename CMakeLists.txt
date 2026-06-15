@@ -14,6 +14,7 @@ add_executable(
     OpenGL
     src/main.cpp
     src/glad.c
+    src/rendering.cpp
     src/stb_image.cpp
 )
 
