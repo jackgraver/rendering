@@ -44,10 +44,12 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 // lighting
-glm::vec3 lightPos(5.2f, 15.0f, 8.0f);
+glm::vec3 lightPos(5.2f, 100.0f, 8.0f);
 
-int main()
-{
+bool renderPolygons = true;
+bool pKeyWasPressed = false;
+
+int main() {
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
@@ -62,8 +64,7 @@ int main()
     // glfw window creation
     // --------------------
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
-    {
+    if (window == NULL) {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         return -1;
@@ -78,8 +79,7 @@ int main()
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
@@ -146,16 +146,6 @@ int main()
     };
 
     World world;
-    for (int x = 0; x < World::SIZE; x++) {
-        for (int y = 0; y < World::SIZE; y++) {
-            for (int z = 0; z < World::SIZE; z++) {
-
-                int index = x + World::SIZE * (y + World::SIZE * z);
-
-                world.chunks[index] = Chunk(x, y, z);
-            }
-        }
-    }
 
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
@@ -185,12 +175,9 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
     // render loop
     // -----------
-    while (!glfwWindowShouldClose(window))
-    {
+    while (!glfwWindowShouldClose(window)) {
         // per-frame time logic
         // --------------------
         float currentFrame = static_cast<float>(glfwGetTime());
@@ -246,6 +233,9 @@ int main()
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+
+        // break;
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -266,8 +256,7 @@ int main()
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
-{
+void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -279,12 +268,18 @@ void processInput(GLFWwindow *window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    const int pKeyState = glfwGetKey(window, GLFW_KEY_P);
+    if (pKeyState == GLFW_PRESS && !pKeyWasPressed) {
+        renderPolygons = !renderPolygons;
+        glPolygonMode(GL_FRONT_AND_BACK, renderPolygons ? GL_FILL : GL_LINE);
+    }
+    pKeyWasPressed = (pKeyState == GLFW_PRESS);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
@@ -293,12 +288,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 // glfw: whenever the mouse moves, this callback is called
 // -------------------------------------------------------
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
-    if (firstMouse)
-    {
+    if (firstMouse) {
         lastX = xpos;
         lastY = ypos;
         firstMouse = false;
@@ -315,7 +308,6 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }

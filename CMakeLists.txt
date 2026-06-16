@@ -16,6 +16,8 @@ add_executable(
     src/glad.c
     src/rendering.cpp
     src/stb_image.cpp
+    src/world.cpp
+    src/chunk.cpp
 )
 
 set_target_properties(OpenGL PROPERTIES
