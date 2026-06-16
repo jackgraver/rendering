@@ -20,7 +20,7 @@ void Chunk::populateChunk() {
         for (unsigned y = 0; y < CHUNK_COLS; y++) {
             for (unsigned z = 0; z < CHUNK_HEIGHT; z++) {
                 glm::ivec3 position(x, y, z);
-                blocks.emplace(position, rand() % 101 > 90 ? Block(AIR) : Block(DIRT));
+                blocks.emplace(position, Block(DIRT));
             }
         }
     }
