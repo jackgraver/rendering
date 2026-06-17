@@ -20,15 +20,15 @@ struct IVec3Hash {
     }
 };
 
-constexpr unsigned CHUNK_COLS = 2;
-constexpr unsigned CHUNK_ROWS = 8;
-constexpr unsigned CHUNK_HEIGHT = 8;
-constexpr unsigned CHUNK_SIZE = CHUNK_ROWS * CHUNK_COLS * CHUNK_HEIGHT;
+constexpr unsigned CHUNK_WIDTH = 8;
+constexpr unsigned CHUNK_HEIGHT = 4;
+constexpr unsigned CHUNK_DEPTH = 8;
+constexpr unsigned CHUNK_SIZE = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
 
 inline glm::ivec3 indexToLocal(int i) {
-    int x = i % CHUNK_ROWS;
-    int y = (i / CHUNK_ROWS) % CHUNK_COLS;
-    int z = i / (CHUNK_ROWS * CHUNK_COLS);
+    int x = i % CHUNK_WIDTH;
+    int y = (i / CHUNK_WIDTH) % CHUNK_HEIGHT;
+    int z = i / (CHUNK_WIDTH * CHUNK_HEIGHT);
 
     return glm::ivec3(x, y, z);
 }

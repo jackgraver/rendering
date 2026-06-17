@@ -11,7 +11,7 @@ class World;
 
 class World {
 public:
-    static constexpr int SIZE = 16;
+    static constexpr int SIZE = 4;
 
     World();
     World(const World&) = delete;

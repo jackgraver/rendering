@@ -34,7 +34,7 @@ const unsigned int SCR_WIDTH = 1400;
 const unsigned int SCR_HEIGHT = 800;
 
 // camera
-Camera camera(glm::vec3(0.0f, 4.0f, 3.0f));
+Camera camera(glm::vec3(10.0f, 15.0f, 10.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -146,6 +146,8 @@ int main() {
     };
 
     World world;
+
+    // std::cout << "spawn location" << world.getChunk(0, 0, 0) << std::endl;
 
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
