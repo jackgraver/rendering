@@ -3,22 +3,11 @@
 
 #include "block.h"
 
-#include <cstddef>
 #include <unordered_map>
 #include <vector>
 
 class Shader;
 class World;
-
-struct IVec3Hash {
-    std::size_t operator()(const glm::ivec3& v) const {
-        std::size_t x = std::hash<int>{}(v.x);
-        std::size_t y = std::hash<int>{}(v.y);
-        std::size_t z = std::hash<int>{}(v.z);
-
-        return x ^ (y << 1) ^ (z << 2);
-    }
-};
 
 constexpr unsigned CHUNK_WIDTH = 8;
 constexpr unsigned CHUNK_HEIGHT = 4;
@@ -93,7 +82,7 @@ private:
     int vertexCount = 0;
     glm::ivec3 chunkPos = glm::ivec3(0);
     // Map of local block positions to blocks in the chunk
-    std::unordered_map<glm::ivec3, Block, IVec3Hash> blocks;
+    std::unordered_map<Coords, Block> blocks;
 
     friend class World;
 };

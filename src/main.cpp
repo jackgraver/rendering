@@ -218,8 +218,8 @@ int main() {
 
         // render the cube
         glBindVertexArray(cubeVAO);
-        for (Chunk& chunk : world.chunks) {
-            chunk.drawChunk(&lightingShader);
+        for (auto& chunk : world.chunks) {
+            chunk.second.drawChunk(&lightingShader);
         }
 
         // also draw the lamp object
@@ -250,8 +250,8 @@ int main() {
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteBuffers(1, &VBO);
 
-    for (Chunk& chunk : world.chunks) {
-        chunk.releaseGpuResources();
+    for (auto& chunk : world.chunks) {
+        chunk.second.releaseGpuResources();
     }
 
     // glfw: terminate, clearing all previously allocated GLFW resources.

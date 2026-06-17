@@ -24,7 +24,7 @@ public:
     Block* getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition);
     const Block* getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition) const;
 
-    Chunk chunks[SIZE * SIZE * SIZE];
+    std::unordered_map<glm::ivec3, Chunk> chunks;
 };
 
 #endif
