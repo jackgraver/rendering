@@ -10,6 +10,8 @@
 
 #include <iostream>
 #include <cstdlib>
+#include <algorithm>
+#include <cmath>
 
 #include "world.h"
 
@@ -17,6 +19,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
+void updateWorldStreaming();
 
 /*
  *
@@ -48,6 +51,8 @@ glm::vec3 lightPos(5.2f, 100.0f, 8.0f);
 
 bool renderPolygons = true;
 bool pKeyWasPressed = false;
+
+std::unique_ptr<World> world;
 
 int main() {
     // glfw: initialize and configure
@@ -145,9 +150,8 @@ int main() {
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
 
-    World world;
-
-    // std::cout << "spawn location" << world.getChunk(0, 0, 0) << std::endl;
+    world = std::make_unique<World>();
+    updateWorldStreaming();
 
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
@@ -193,6 +197,7 @@ int main() {
         // input
         // -----
         processInput(window);
+        updateWorldStreaming();
 
         // render
         // ------
@@ -218,7 +223,7 @@ int main() {
 
         // render the cube
         glBindVertexArray(cubeVAO);
-        for (auto& chunk : world.chunks) {
+        for (auto& chunk : world->chunks) {
             chunk.second.drawChunk(&lightingShader);
         }
 
@@ -250,7 +255,7 @@ int main() {
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteBuffers(1, &VBO);
 
-    for (auto& chunk : world.chunks) {
+    for (auto& chunk : world->chunks) {
         chunk.second.releaseGpuResources();
     }
 
@@ -291,6 +296,21 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
+void updateWorldStreaming() {
+    if (!world)
+        return;
+
+    const Coords currentChunk(
+        std::max(0, floorDiv(static_cast<int>(std::floor(camera.Position.x)), static_cast<int>(CHUNK_WIDTH))),
+        floorDiv(static_cast<int>(std::floor(camera.Position.y)), static_cast<int>(CHUNK_HEIGHT)),
+        std::max(0, floorDiv(static_cast<int>(std::floor(camera.Position.z)), static_cast<int>(CHUNK_DEPTH)))
+    );
+
+    if (world->chunks.empty() || world->centerChunk != currentChunk) {
+        world->centerChunk = currentChunk;
+        world->updateLoadedChunks();
+    }
+}
 
 // glfw: whenever the mouse moves, this callback is called
 // -------------------------------------------------------
@@ -308,7 +328,6 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
 
     lastX = xpos;
     lastY = ypos;
-
     camera.ProcessMouseMovement(xoffset, yoffset);
 }
 

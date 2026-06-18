@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include <glm/glm.hpp>
+#include "Coords.h"
 #include "chunk.h"
 
 // MUST be here (used in Chunk layout)
@@ -19,12 +20,14 @@ public:
     World(World&&) = delete;
     World& operator=(World&&) = delete;
 
+    void updateLoadedChunks();
     Chunk& getChunk(int x, int y, int z);
     const Chunk& getChunk(int x, int y, int z) const;
     Block* getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition);
     const Block* getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition) const;
 
-    std::unordered_map<glm::ivec3, Chunk> chunks;
+    Coords centerChunk;
+    std::unordered_map<Coords, Chunk> chunks;
 };
 
 #endif

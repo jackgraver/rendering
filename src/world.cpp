@@ -1,14 +1,16 @@
 #include "world.h"
 
-namespace {
-int chunkIndex(int x, int y, int z) {
-    return x + World::SIZE * (y + World::SIZE * z);
-}
+#include <algorithm>
+#include <iostream>
+#include <stdexcept>
+#include <unordered_set>
+#include <vector>
 
+namespace {
 bool isChunkPositionInBounds(const glm::ivec3& chunkPosition) {
-    return chunkPosition.x >= 0 && chunkPosition.x < World::SIZE
+    return chunkPosition.x >= 0
         && chunkPosition.y >= 0 && chunkPosition.y < World::SIZE
-        && chunkPosition.z >= 0 && chunkPosition.z < World::SIZE;
+        && chunkPosition.z >= 0;
 }
 }
 
@@ -46,27 +48,82 @@ const FaceData faces[6] = {
 };
 
 World::World() {
-    for (int x = 0; x < SIZE; x++) {
-        for (int y = 0; y < SIZE; y++) {
-            for (int z = 0; z < SIZE; z++) {
-                getChunk(x, y, z) = Chunk(this, x, y, z);
+    centerChunk = Coords(0, 0, 0);
+    chunks.reserve(SIZE * SIZE * SIZE);
+}
+
+void World::updateLoadedChunks() {
+    constexpr int LOAD_RADIUS = 8;
+
+    const int minX = std::max(0, centerChunk.x() - LOAD_RADIUS);
+    const int maxX = centerChunk.x() + LOAD_RADIUS;
+    const int minY = 0;
+    const int maxY = SIZE - 1;
+    const int minZ = std::max(0, centerChunk.z() - LOAD_RADIUS);
+    const int maxZ = centerChunk.z() + LOAD_RADIUS;
+
+    for (auto it = chunks.begin(); it != chunks.end(); ) {
+        Chunk& chunk = it->second;
+
+        if (chunk.chunkPos.x > maxX || chunk.chunkPos.x < minX ||
+            chunk.chunkPos.y > maxY || chunk.chunkPos.y < minY ||
+            chunk.chunkPos.z > maxZ || chunk.chunkPos.z < minZ) {
+            chunk.releaseGpuResources();
+            it = chunks.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    std::vector<Coords> createdChunks;
+    createdChunks.reserve((maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1));
+
+    for (int x = minX; x <= maxX; ++x) {
+        for (int y = minY; y <= maxY; ++y) {
+            for (int z = minZ; z <= maxZ; ++z) {
+                const Coords chunkCoords(x, y, z);
+                if (chunks.find(chunkCoords) != chunks.end())
+                    continue;
+
+                chunks.emplace(chunkCoords, Chunk(this, x, y, z));
+                createdChunks.push_back(chunkCoords);
             }
         }
     }
 
-    for (Chunk& chunk : chunks)
-        chunk.populateChunk();
+    if (createdChunks.empty())
+        return;
 
-    for (Chunk& chunk : chunks)
-        chunk.buildChunkMesh();
+    for (const Coords& coords : createdChunks)
+        chunks.at(coords).populateChunk();
+
+    std::unordered_set<Coords> chunksToRebuild;
+    for (const Coords& coords : createdChunks) {
+        chunksToRebuild.insert(coords);
+
+        for (const FaceData& face : faces) {
+            const Coords neighborCoords = coords + face.neighborOffset;
+            if (chunks.find(neighborCoords) != chunks.end())
+                chunksToRebuild.insert(neighborCoords);
+        }
+    }
+
+    for (const Coords& coords : chunksToRebuild)
+        chunks.at(coords).buildChunkMesh();
 }
 
 Chunk& World::getChunk(int x, int y, int z) {
-    return chunks[chunkIndex(x, y, z)];
+    const Coords chunkCoords(x, y, z);
+    auto result = chunks.try_emplace(chunkCoords, this, x, y, z);
+    return result.first->second;
 }
 
 const Chunk& World::getChunk(int x, int y, int z) const {
-    return chunks[chunkIndex(x, y, z)];
+    auto it = chunks.find(Coords(x, y, z));
+    if (it == chunks.end())
+        throw std::out_of_range("Requested chunk is not loaded");
+
+    return it->second;
 }
 
 Block* World::getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition) {
@@ -77,5 +134,9 @@ const Block* World::getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& 
     if (!isChunkPositionInBounds(chunkPosition))
         return nullptr;
 
-    return getChunk(chunkPosition.x, chunkPosition.y, chunkPosition.z).getLocalBlock(blockPosition);
+    auto it = chunks.find(Coords(chunkPosition));
+    if (it == chunks.end())
+        return nullptr;
+
+    return it->second.getLocalBlock(blockPosition);
 }

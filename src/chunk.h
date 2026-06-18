@@ -2,6 +2,7 @@
 #define CHUNK_H
 
 #include "block.h"
+#include "coords.h"
 
 #include <unordered_map>
 #include <vector>
@@ -69,6 +70,8 @@ public:
     void drawChunk(Shader* shader);
     void releaseGpuResources();
 
+    glm::ivec3 chunkPos = glm::ivec3(0);
+
 private:
     bool isLocalPositionInBounds(const glm::ivec3& localPos) const;
     Block* getLocalBlock(const glm::ivec3& localPos);
@@ -80,7 +83,6 @@ private:
     unsigned int VBO = 0;
     bool meshDirty = true;
     int vertexCount = 0;
-    glm::ivec3 chunkPos = glm::ivec3(0);
     // Map of local block positions to blocks in the chunk
     std::unordered_map<Coords, Block> blocks;
 
