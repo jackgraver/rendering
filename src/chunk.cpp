@@ -18,34 +18,42 @@ void Chunk::setWorld(World* world) {
 void Chunk::populateChunk() {
     blocks.clear();
 
-    constexpr float baseHeight = 4.0f;
-    constexpr float heightScale = 3.0f;
+    constexpr float baseHeightWorld = 2.4f;
+    constexpr float broadHillFrequency = 0.08f;
+    constexpr float broadHillAmplitude = 1.6f;
+    constexpr float detailFrequency = 0.35f;
+    constexpr float detailAmplitude = 0.35f;
 
     for (unsigned x = 0; x < CHUNK_WIDTH; x++) {
         for (unsigned z = 0; z < CHUNK_DEPTH; z++) {
-            int worldX = chunkPos.x * static_cast<int>(CHUNK_WIDTH) + static_cast<int>(x);
-            int worldZ = chunkPos.z * static_cast<int>(CHUNK_DEPTH) + static_cast<int>(z);
+            const float worldX = (static_cast<float>(chunkPos.x * static_cast<int>(CHUNK_WIDTH)) + static_cast<float>(x)) * BLOCK_SIZE;
+            const float worldZ = (static_cast<float>(chunkPos.z * static_cast<int>(CHUNK_DEPTH)) + static_cast<float>(z)) * BLOCK_SIZE;
 
-            float noise = 0.0f;
+            const float broadNoise = perlin(worldX * broadHillFrequency, worldZ * broadHillFrequency);
+
+            float detailNoise = 0.0f;
             float amplitude = 1.0f;
-            float frequency = 0.05f;
+            float frequency = detailFrequency;
             float maxAmplitude = 0.0f;
 
             for (int octave = 0; octave < 4; octave++) {
-                noise += perlin(worldX * frequency, worldZ * frequency) * amplitude;
+                detailNoise += perlin(worldX * frequency, worldZ * frequency) * amplitude;
                 maxAmplitude += amplitude;
                 amplitude *= 0.5f;
                 frequency *= 2.0f;
             }
 
-            noise /= maxAmplitude; // roughly [-1, 1]
+            detailNoise /= maxAmplitude; // roughly [-1, 1]
 
-            int terrainHeight = static_cast<int>(baseHeight + noise * heightScale);
+            const float terrainHeightWorld = baseHeightWorld
+                + (broadNoise * broadHillAmplitude)
+                + (detailNoise * detailAmplitude);
 
             for (unsigned y = 0; y < CHUNK_HEIGHT; y++) {
-                int worldY = chunkPos.y * static_cast<int>(CHUNK_HEIGHT) + static_cast<int>(y);
+                const int worldBlockY = chunkPos.y * static_cast<int>(CHUNK_HEIGHT) + static_cast<int>(y);
+                const float worldY = static_cast<float>(worldBlockY) * BLOCK_SIZE;
 
-                if (worldY <= terrainHeight) {
+                if (worldY <= terrainHeightWorld) {
                     blocks.emplace(glm::ivec3(x, y, z), Block(DIRT));
                 }
             }
@@ -59,9 +67,9 @@ void Chunk::buildChunkMesh() {
     std::vector<float> vertices;
 
     glm::vec3 chunkOffset = {
-        static_cast<float>(chunkPos.x * static_cast<int>(CHUNK_WIDTH)),
-        static_cast<float>(chunkPos.y * static_cast<int>(CHUNK_HEIGHT)),
-        static_cast<float>(chunkPos.z * static_cast<int>(CHUNK_DEPTH))
+        static_cast<float>(chunkPos.x) * CHUNK_WORLD_WIDTH,
+        static_cast<float>(chunkPos.y) * CHUNK_WORLD_HEIGHT,
+        static_cast<float>(chunkPos.z) * CHUNK_WORLD_DEPTH
     };
 
     for (const auto& blockEntry : blocks) {
@@ -78,9 +86,9 @@ void Chunk::buildChunkMesh() {
             if (!shouldAddFace)
                 continue;
 
-            glm::vec3 base = chunkOffset + glm::vec3(localPos);
+            glm::vec3 base = chunkOffset + (glm::vec3(localPos) * BLOCK_SIZE);
             for (int i = 0; i < 6; i++) {
-                pushVertex(vertices, base + face.vertices[i], face.normal);
+                pushVertex(vertices, base + (face.vertices[i] * BLOCK_SIZE), face.normal);
             }
         }
     }
@@ -166,21 +174,21 @@ const Block* Chunk::getBlock(const glm::ivec3& localPos) const {
         return nullptr;
 
     glm::ivec3 worldBlockPos = {
-        chunkPos.x * static_cast<int>(CHUNK_WIDTH) + localPos.x,
-        chunkPos.y * static_cast<int>(CHUNK_HEIGHT) + localPos.y,
-        chunkPos.z * static_cast<int>(CHUNK_DEPTH) + localPos.z
+        chunkPos.x * CHUNK_WIDTH + localPos.x,
+        chunkPos.y * CHUNK_HEIGHT + localPos.y,
+        chunkPos.z * CHUNK_DEPTH + localPos.z
     };
 
     glm::ivec3 neighborChunkPos = {
-        floorDiv(worldBlockPos.x, static_cast<int>(CHUNK_WIDTH)),
-        floorDiv(worldBlockPos.y, static_cast<int>(CHUNK_HEIGHT)),
-        floorDiv(worldBlockPos.z, static_cast<int>(CHUNK_DEPTH))
+        floorDiv(worldBlockPos.x, CHUNK_WIDTH),
+        floorDiv(worldBlockPos.y, CHUNK_HEIGHT),
+        floorDiv(worldBlockPos.z, CHUNK_DEPTH)
     };
 
     glm::ivec3 neighborLocalPos = {
-        positiveMod(worldBlockPos.x, static_cast<int>(CHUNK_WIDTH)),
-        positiveMod(worldBlockPos.y, static_cast<int>(CHUNK_HEIGHT)),
-        positiveMod(worldBlockPos.z, static_cast<int>(CHUNK_DEPTH))
+        positiveMod(worldBlockPos.x, CHUNK_WIDTH),
+        positiveMod(worldBlockPos.y, CHUNK_HEIGHT),
+        positiveMod(worldBlockPos.z, CHUNK_DEPTH)
     };
 
     return world->getBlock(neighborChunkPos, neighborLocalPos);

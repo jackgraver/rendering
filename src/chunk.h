@@ -10,10 +10,15 @@
 class Shader;
 class World;
 
-constexpr unsigned CHUNK_WIDTH = 8;
-constexpr unsigned CHUNK_HEIGHT = 4;
-constexpr unsigned CHUNK_DEPTH = 8;
+constexpr unsigned CHUNK_WIDTH = 16;
+constexpr unsigned CHUNK_HEIGHT = 16;
+constexpr unsigned CHUNK_DEPTH = 16;
 constexpr unsigned CHUNK_SIZE = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
+
+constexpr float BLOCK_SIZE = 0.1f;
+constexpr float CHUNK_WORLD_WIDTH = CHUNK_WIDTH * BLOCK_SIZE;
+constexpr float CHUNK_WORLD_HEIGHT = CHUNK_HEIGHT * BLOCK_SIZE;
+constexpr float CHUNK_WORLD_DEPTH = CHUNK_DEPTH * BLOCK_SIZE;
 
 inline glm::ivec3 indexToLocal(int i) {
     int x = i % CHUNK_WIDTH;

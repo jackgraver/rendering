@@ -10,7 +10,6 @@
 
 #include <iostream>
 #include <cstdlib>
-#include <algorithm>
 #include <cmath>
 
 #include "world.h"
@@ -212,7 +211,7 @@ int main() {
         lightingShader.setVec3("viewPos", camera.Position);
 
         // view/projection transformations
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.01f, 300.0f);
         glm::mat4 view = camera.GetViewMatrix();
         lightingShader.setMat4("projection", projection);
         lightingShader.setMat4("view", view);
@@ -304,10 +303,12 @@ void updateWorldStreaming() {
     if (!world)
         return;
 
+
+
     const Coords currentChunk(
-        std::max(0, floorDiv(static_cast<int>(std::floor(camera.Position.x)), static_cast<int>(CHUNK_WIDTH))),
-        floorDiv(static_cast<int>(std::floor(camera.Position.y)), static_cast<int>(CHUNK_HEIGHT)),
-        std::max(0, floorDiv(static_cast<int>(std::floor(camera.Position.z)), static_cast<int>(CHUNK_DEPTH)))
+        static_cast<int>(std::floor(camera.Position.x / CHUNK_WORLD_WIDTH)),
+        static_cast<int>(std::floor(camera.Position.y / CHUNK_WORLD_HEIGHT)),
+        static_cast<int>(std::floor(camera.Position.z / CHUNK_WORLD_DEPTH))
     );
 
     if (world->chunks.empty() || world->centerChunk != currentChunk) {

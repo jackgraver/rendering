@@ -12,7 +12,7 @@ class World;
 
 class World {
 public:
-    static constexpr int SIZE = 4;
+    static constexpr int LOAD_RADIUS = 8;
 
     World();
     World(const World&) = delete;

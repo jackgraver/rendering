@@ -1,19 +1,22 @@
 #include "world.h"
 
-#include <algorithm>
-#include <iostream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
 
 namespace {
+constexpr int kWorldChunkHeight = 4;
+
 bool isChunkPositionInBounds(const glm::ivec3& chunkPosition) {
-    return chunkPosition.x >= 0
-        && chunkPosition.y >= 0 && chunkPosition.y < World::SIZE
-        && chunkPosition.z >= 0;
+    return chunkPosition.y >= 0 && chunkPosition.y < kWorldChunkHeight;
 }
 }
 
+// One entry per block face used by chunk mesh generation.
+// Each FaceData stores:
+// - the neighbor block offset to test for occlusion
+// - the face normal for lighting
+// - the 6 vertices (2 triangles) for that face in local block space
 const FaceData faces[6] = {
     // +X
     {{ 1, 0, 0}, { 1.0f, 0.0f, 0.0f}, {
@@ -49,17 +52,15 @@ const FaceData faces[6] = {
 
 World::World() {
     centerChunk = Coords(0, 0, 0);
-    chunks.reserve(SIZE * SIZE * SIZE);
+    chunks.reserve(LOAD_RADIUS * LOAD_RADIUS * LOAD_RADIUS);
 }
 
 void World::updateLoadedChunks() {
-    constexpr int LOAD_RADIUS = 8;
-
-    const int minX = std::max(0, centerChunk.x() - LOAD_RADIUS);
+    const int minX = centerChunk.x() - LOAD_RADIUS;
     const int maxX = centerChunk.x() + LOAD_RADIUS;
     const int minY = 0;
-    const int maxY = SIZE - 1;
-    const int minZ = std::max(0, centerChunk.z() - LOAD_RADIUS);
+    const int maxY = kWorldChunkHeight - 1;
+    const int minZ = centerChunk.z() - LOAD_RADIUS;
     const int maxZ = centerChunk.z() + LOAD_RADIUS;
 
     for (auto it = chunks.begin(); it != chunks.end(); ) {
