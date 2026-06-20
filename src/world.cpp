@@ -52,10 +52,28 @@ const FaceData faces[6] = {
 
 World::World() {
     centerChunk = Coords(0, 0, 0);
-    chunks.reserve(LOAD_RADIUS * LOAD_RADIUS * LOAD_RADIUS);
+    playerChunk = centerChunk;
+
+    const int worldDiameter = (LOAD_RADIUS * 2) + 1;
+    chunks.reserve(worldDiameter * worldDiameter * kWorldChunkHeight);
+
+    workerThread = std::thread(&World::workerLoop, this);
 }
 
-void World::updateLoadedChunks() {
+World::~World() {
+    {
+        std::lock_guard<std::mutex> lock(jobsMutex);
+        workerRunning = false;
+    }
+    jobsCondition.notify_all();
+
+    if (workerThread.joinable())
+        workerThread.join();
+}
+
+void World::requestChunks() {
+    centerChunk = playerChunk;
+
     const int minX = centerChunk.x() - LOAD_RADIUS;
     const int maxX = centerChunk.x() + LOAD_RADIUS;
     const int minY = 0;
@@ -63,21 +81,7 @@ void World::updateLoadedChunks() {
     const int minZ = centerChunk.z() - LOAD_RADIUS;
     const int maxZ = centerChunk.z() + LOAD_RADIUS;
 
-    for (auto it = chunks.begin(); it != chunks.end(); ) {
-        Chunk& chunk = it->second;
-
-        if (chunk.chunkPos.x > maxX || chunk.chunkPos.x < minX ||
-            chunk.chunkPos.y > maxY || chunk.chunkPos.y < minY ||
-            chunk.chunkPos.z > maxZ || chunk.chunkPos.z < minZ) {
-            chunk.releaseGpuResources();
-            it = chunks.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    std::vector<Coords> createdChunks;
-    createdChunks.reserve((maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1));
+    std::vector<WorkerJob> jobsToQueue;
 
     for (int x = minX; x <= maxX; ++x) {
         for (int y = minY; y <= maxY; ++y) {
@@ -86,31 +90,124 @@ void World::updateLoadedChunks() {
                 if (chunks.find(chunkCoords) != chunks.end())
                     continue;
 
-                chunks.emplace(chunkCoords, Chunk(this, x, y, z));
-                createdChunks.push_back(chunkCoords);
+                if (!requestedChunks.insert(chunkCoords).second)
+                    continue;
+
+                jobsToQueue.push_back({WorkerJobType::Populate, chunkCoords});
             }
         }
     }
 
-    if (createdChunks.empty())
+    if (jobsToQueue.empty())
         return;
 
-    for (const Coords& coords : createdChunks)
-        chunks.at(coords).populateChunk();
-
-    std::unordered_set<Coords> chunksToRebuild;
-    for (const Coords& coords : createdChunks) {
-        chunksToRebuild.insert(coords);
-
-        for (const FaceData& face : faces) {
-            const Coords neighborCoords = coords + face.neighborOffset;
-            if (chunks.find(neighborCoords) != chunks.end())
-                chunksToRebuild.insert(neighborCoords);
-        }
+    {
+        std::lock_guard<std::mutex> lock(jobsMutex);
+        for (WorkerJob& job : jobsToQueue)
+            pendingJobs.push(std::move(job));
     }
 
-    for (const Coords& coords : chunksToRebuild)
-        chunks.at(coords).buildChunkMesh();
+    jobsCondition.notify_one();
+}
+
+void World::processNewChunks() {
+    std::queue<Chunk> readyChunks;
+    {
+        std::lock_guard<std::mutex> lock(completedMutex);
+        std::swap(readyChunks, populatedChunkResults);
+    }
+
+    while (!readyChunks.empty()) {
+        Chunk chunk = std::move(readyChunks.front());
+        readyChunks.pop();
+
+        const Coords chunkCoords(chunk.chunkPos);
+        chunk.setWorld(this);
+
+        {
+            std::lock_guard<std::mutex> lock(chunksMutex);
+            chunks.insert_or_assign(chunkCoords, std::move(chunk));
+        }
+
+        enqueueMeshJob(chunkCoords);
+        for (const FaceData& face : faces)
+            enqueueMeshJob(chunkCoords + face.neighborOffset);
+    }
+}
+
+void World::loadNewChunks() {
+    std::queue<MeshResult> readyMeshes;
+    {
+        std::lock_guard<std::mutex> lock(completedMutex);
+        std::swap(readyMeshes, meshResults);
+    }
+
+    while (!readyMeshes.empty()) {
+        MeshResult meshResult = std::move(readyMeshes.front());
+        readyMeshes.pop();
+
+        auto it = chunks.find(meshResult.coords);
+        if (it != chunks.end()) {
+            it->second.setMeshVertices(std::move(meshResult.vertices));
+        }
+
+        queuedMeshJobs.erase(meshResult.coords);
+    }
+}
+
+void World::workerLoop() {
+    while (true) {
+        WorkerJob job;
+        {
+            std::unique_lock<std::mutex> lock(jobsMutex);
+            jobsCondition.wait(lock, [this] { return !workerRunning || !pendingJobs.empty(); });
+
+            if (!workerRunning && pendingJobs.empty())
+                return;
+
+            job = std::move(pendingJobs.front());
+            pendingJobs.pop();
+        }
+
+        if (job.type == WorkerJobType::Populate) {
+            Chunk chunk(this, job.coords.x(), job.coords.y(), job.coords.z());
+            chunk.populateChunk();
+
+            std::lock_guard<std::mutex> lock(completedMutex);
+            populatedChunkResults.push(std::move(chunk));
+            continue;
+        }
+
+        MeshResult meshResult;
+        meshResult.coords = job.coords;
+        {
+            std::lock_guard<std::mutex> lock(chunksMutex);
+            auto it = chunks.find(job.coords);
+            if (it != chunks.end()) {
+                meshResult.vertices = it->second.buildMeshVertices();
+            }
+        }
+
+        std::lock_guard<std::mutex> lock(completedMutex);
+        meshResults.push(std::move(meshResult));
+    }
+}
+
+void World::enqueueMeshJob(const Coords& coords) {
+    if (queuedMeshJobs.find(coords) != queuedMeshJobs.end())
+        return;
+
+    if (chunks.find(coords) == chunks.end())
+        return;
+
+    queuedMeshJobs.insert(coords);
+
+    {
+        std::lock_guard<std::mutex> lock(jobsMutex);
+        pendingJobs.push({WorkerJobType::Mesh, coords});
+    }
+
+    jobsCondition.notify_one();
 }
 
 Chunk& World::getChunk(int x, int y, int z) {

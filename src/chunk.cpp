@@ -59,11 +59,13 @@ void Chunk::populateChunk() {
             }
         }
     }
-
-    meshDirty = true;
 }
 
 void Chunk::buildChunkMesh() {
+    setMeshVertices(buildMeshVertices());
+}
+
+std::vector<float> Chunk::buildMeshVertices() const {
     std::vector<float> vertices;
 
     glm::vec3 chunkOffset = {
@@ -93,7 +95,18 @@ void Chunk::buildChunkMesh() {
         }
     }
 
-    vertexCount = static_cast<int>(vertices.size() / 6);
+    return vertices;
+}
+
+void Chunk::setMeshVertices(std::vector<float>&& vertices) {
+    meshVertices = std::move(vertices);
+    vertexCount = static_cast<int>(meshVertices.size() / 6);
+    gpuUploadDirty = true;
+}
+
+void Chunk::uploadMesh() {
+    if (!gpuUploadDirty)
+        return;
 
     if (VAO == 0)
         glGenVertexArrays(1, &VAO);
@@ -106,8 +119,8 @@ void Chunk::buildChunkMesh() {
 
     glBufferData(
         GL_ARRAY_BUFFER,
-        vertices.size() * sizeof(float),
-        vertices.data(),
+        meshVertices.size() * sizeof(float),
+        meshVertices.data(),
         GL_STATIC_DRAW
     );
 
@@ -117,14 +130,14 @@ void Chunk::buildChunkMesh() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    meshDirty = false;
+    gpuUploadDirty = false;
 }
 
 void Chunk::drawChunk(Shader* shader) {
-    if (meshDirty)
-        buildChunkMesh();
+    if (gpuUploadDirty)
+        uploadMesh();
 
-    if (vertexCount == 0)
+    if (vertexCount == 0 || VAO == 0)
         return;
 
     shader->setVec3("objectColor", blockTypeColor(DIRT));

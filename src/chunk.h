@@ -72,6 +72,9 @@ public:
     void setWorld(World* world);
     void populateChunk();
     void buildChunkMesh();
+    std::vector<float> buildMeshVertices() const;
+    void setMeshVertices(std::vector<float>&& vertices);
+    void uploadMesh();
     void drawChunk(Shader* shader);
     void releaseGpuResources();
 
@@ -86,9 +89,9 @@ private:
     World* world = nullptr;
     unsigned int VAO = 0;
     unsigned int VBO = 0;
-    bool meshDirty = true;
+    bool gpuUploadDirty = false;
     int vertexCount = 0;
-    // Map of local block positions to blocks in the chunk
+    std::vector<float> meshVertices;
     std::unordered_map<Coords, Block> blocks;
 
     friend class World;

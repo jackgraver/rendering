@@ -11,7 +11,6 @@
 #include <iostream>
 #include <cstdlib>
 #include <cmath>
-
 #include "world.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -151,6 +150,7 @@ int main() {
 
     world = std::make_unique<World>();
     updateWorldStreaming();
+    world->requestChunks();
 
     // first, configure the cube's VAO (and VBO)
     unsigned int VBO, cubeVAO;
@@ -197,6 +197,9 @@ int main() {
         // -----
         processInput(window);
         updateWorldStreaming();
+        world->requestChunks();
+        world->processNewChunks();
+        world->loadNewChunks();
 
         // render
         // ------
@@ -303,18 +306,18 @@ void updateWorldStreaming() {
     if (!world)
         return;
 
-
-
     const Coords currentChunk(
         static_cast<int>(std::floor(camera.Position.x / CHUNK_WORLD_WIDTH)),
         static_cast<int>(std::floor(camera.Position.y / CHUNK_WORLD_HEIGHT)),
         static_cast<int>(std::floor(camera.Position.z / CHUNK_WORLD_DEPTH))
     );
 
-    if (world->chunks.empty() || world->centerChunk != currentChunk) {
-        world->centerChunk = currentChunk;
-        world->updateLoadedChunks();
-    }
+    world->playerChunk = currentChunk;
+
+    // if (world->chunks.empty() || world->centerChunk != currentChunk) {
+    //     world->centerChunk = currentChunk;
+    //     world->updateLoadedChunks();
+    // }
 }
 
 // glfw: whenever the mouse moves, this callback is called
