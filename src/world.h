@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include <condition_variable>
+#include <cstddef>
 #include <glm/glm.hpp>
 #include <mutex>
 #include <queue>
@@ -40,6 +41,10 @@ public:
     std::unordered_map<Coords, Chunk> chunks;
 
 private:
+    static constexpr std::size_t kMaxChunkIntegrationsPerFrame = 4;
+    static constexpr std::size_t kMaxMeshResultsPerFrame = 4;
+    static constexpr std::size_t kMaxGpuUploadsPerFrame = 2;
+
     enum class WorkerJobType {
         Populate,
         Mesh,
@@ -61,8 +66,10 @@ private:
     std::queue<WorkerJob> pendingJobs;
     std::queue<Chunk> populatedChunkResults;
     std::queue<MeshResult> meshResults;
+    std::queue<Coords> pendingGpuUploads;
     std::unordered_set<Coords> requestedChunks;
     std::unordered_set<Coords> queuedMeshJobs;
+    std::unordered_set<Coords> queuedGpuUploads;
 
     std::thread workerThread;
     std::mutex jobsMutex;

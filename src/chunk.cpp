@@ -134,10 +134,7 @@ void Chunk::uploadMesh() {
 }
 
 void Chunk::drawChunk(Shader* shader) {
-    if (gpuUploadDirty)
-        uploadMesh();
-
-    if (vertexCount == 0 || VAO == 0)
+    if (gpuUploadDirty || vertexCount == 0 || VAO == 0)
         return;
 
     shader->setVec3("objectColor", blockTypeColor(DIRT));

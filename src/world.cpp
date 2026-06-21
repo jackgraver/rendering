@@ -111,15 +111,18 @@ void World::requestChunks() {
 }
 
 void World::processNewChunks() {
-    std::queue<Chunk> readyChunks;
-    {
-        std::lock_guard<std::mutex> lock(completedMutex);
-        std::swap(readyChunks, populatedChunkResults);
-    }
+    std::size_t processedChunks = 0;
 
-    while (!readyChunks.empty()) {
-        Chunk chunk = std::move(readyChunks.front());
-        readyChunks.pop();
+    while (processedChunks < kMaxChunkIntegrationsPerFrame) {
+        Chunk chunk;
+        {
+            std::lock_guard<std::mutex> lock(completedMutex);
+            if (populatedChunkResults.empty())
+                break;
+
+            chunk = std::move(populatedChunkResults.front());
+            populatedChunkResults.pop();
+        }
 
         const Coords chunkCoords(chunk.chunkPos);
         chunk.setWorld(this);
@@ -132,26 +135,64 @@ void World::processNewChunks() {
         enqueueMeshJob(chunkCoords);
         for (const FaceData& face : faces)
             enqueueMeshJob(chunkCoords + face.neighborOffset);
+
+        ++processedChunks;
     }
 }
 
 void World::loadNewChunks() {
-    std::queue<MeshResult> readyMeshes;
-    {
-        std::lock_guard<std::mutex> lock(completedMutex);
-        std::swap(readyMeshes, meshResults);
-    }
+    std::size_t appliedMeshResults = 0;
 
-    while (!readyMeshes.empty()) {
-        MeshResult meshResult = std::move(readyMeshes.front());
-        readyMeshes.pop();
+    while (appliedMeshResults < kMaxMeshResultsPerFrame) {
+        MeshResult meshResult;
+        {
+            std::lock_guard<std::mutex> lock(completedMutex);
+            if (meshResults.empty())
+                break;
 
-        auto it = chunks.find(meshResult.coords);
-        if (it != chunks.end()) {
-            it->second.setMeshVertices(std::move(meshResult.vertices));
+            meshResult = std::move(meshResults.front());
+            meshResults.pop();
         }
 
+        bool chunkExists = false;
+        {
+            std::lock_guard<std::mutex> lock(chunksMutex);
+            auto it = chunks.find(meshResult.coords);
+            if (it != chunks.end()) {
+                it->second.setMeshVertices(std::move(meshResult.vertices));
+                chunkExists = true;
+            }
+        }
+
+        if (chunkExists && queuedGpuUploads.insert(meshResult.coords).second)
+            pendingGpuUploads.push(meshResult.coords);
+
         queuedMeshJobs.erase(meshResult.coords);
+        ++appliedMeshResults;
+    }
+
+    std::size_t uploadedMeshes = 0;
+    while (uploadedMeshes < kMaxGpuUploadsPerFrame) {
+        if (pendingGpuUploads.empty())
+            break;
+
+        const Coords coords = pendingGpuUploads.front();
+        pendingGpuUploads.pop();
+
+        Chunk* chunkToUpload = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(chunksMutex);
+            auto it = chunks.find(coords);
+            if (it != chunks.end())
+                chunkToUpload = &it->second;
+        }
+
+        if (chunkToUpload != nullptr) {
+            chunkToUpload->uploadMesh();
+            ++uploadedMeshes;
+        }
+
+        queuedGpuUploads.erase(coords);
     }
 }
 
