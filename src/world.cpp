@@ -50,7 +50,7 @@ const FaceData faces[6] = {
     }},
 };
 
-World::World() {
+World::World(): worldShader("src/shaders/lighting_vert.glsl", "src/shaders/lighting_frag.glsl") {
     centerChunk = Coords(0, 0, 0);
     playerChunk = centerChunk;
 
@@ -196,9 +196,21 @@ void World::loadNewChunks() {
     }
 }
 
+void World::drawChunks() {
+    glm::mat4 model = glm::mat4(1.0f);
+    worldShader.setMat4("model", model);
+
+    for (auto& chunk : chunks) {
+        chunk.second.drawChunk(&worldShader);
+    }
+}
+
 void World::workerLoop() {
+    // Background infinite check loop
     while (true) {
+        // Current job
         WorkerJob job;
+        // Scope block on lock, find current job if any exist or non already executing
         {
             std::unique_lock<std::mutex> lock(jobsMutex);
             jobsCondition.wait(lock, [this] { return !workerRunning || !pendingJobs.empty(); });
@@ -210,6 +222,7 @@ void World::workerLoop() {
             pendingJobs.pop();
         }
 
+        // Job is Populate, for a given chunk in job we need to populate its blocks then add to queue for mesh building
         if (job.type == WorkerJobType::Populate) {
             Chunk chunk(this, job.coords.x(), job.coords.y(), job.coords.z());
             chunk.populateChunk();
@@ -218,19 +231,21 @@ void World::workerLoop() {
             populatedChunkResults.push(std::move(chunk));
             continue;
         }
-
-        MeshResult meshResult;
-        meshResult.coords = job.coords;
-        {
-            std::lock_guard<std::mutex> lock(chunksMutex);
-            auto it = chunks.find(job.coords);
-            if (it != chunks.end()) {
-                meshResult.vertices = it->second.buildMeshVertices();
+        // Job is Mesh, for a given chunk in job we need to build its mesh vertices then add to queue for GPU upload
+        if (job.type == WorkerJobType::Mesh) {
+            MeshResult meshResult;
+            meshResult.coords = job.coords;
+            {
+                std::lock_guard<std::mutex> lock(chunksMutex);
+                auto it = chunks.find(job.coords);
+                if (it != chunks.end()) {
+                    meshResult.vertices = it->second.buildMeshVertices();
+                }
             }
-        }
 
-        std::lock_guard<std::mutex> lock(completedMutex);
-        meshResults.push(std::move(meshResult));
+            std::lock_guard<std::mutex> lock(completedMutex);
+            meshResults.push(std::move(meshResult));
+        }
     }
 }
 

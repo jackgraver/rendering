@@ -12,6 +12,7 @@
 
 #include "Coords.h"
 #include "chunk.h"
+#include "shader.h"
 
 class Shader;
 class World;
@@ -31,6 +32,10 @@ public:
     void processNewChunks();
     void loadNewChunks();
 
+    // Draws all chunks loaded into memory and within player range.
+    // - Should simple call chunk draw calls for each chunk.
+    void drawChunks();
+
     Chunk& getChunk(int x, int y, int z);
     const Chunk& getChunk(int x, int y, int z) const;
     Block* getBlock(const glm::ivec3& chunkPosition, const glm::ivec3& blockPosition);
@@ -39,6 +44,7 @@ public:
     Coords centerChunk;
     Coords playerChunk;
     std::unordered_map<Coords, Chunk> chunks;
+    Shader worldShader;
 
 private:
     static constexpr std::size_t kMaxChunkIntegrationsPerFrame = 4;

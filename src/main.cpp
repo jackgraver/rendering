@@ -49,19 +49,12 @@ int main() {
     }
 
     Lighting light;
-    if (!light.isValid()) {
-        return 0;
-    }
-    // build and compile our shader zprogram
-    // ------------------------------------
-    Shader lightingShader("src/shaders/lighting_vert.glsl", "src/shaders/lighting_frag.glsl");
-    if (!lightingShader.valid) {
-        return 0;
-    }
 
     world = std::make_unique<World>();
     updateWorldStreaming();
     world->requestChunks();
+    world->processNewChunks();
+    world->loadNewChunks();
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
@@ -73,32 +66,22 @@ int main() {
         lastFrame = currentFrame;
 
         processInput(window);
-        updateWorldStreaming();
-        world->requestChunks();
-        world->processNewChunks();
-        world->loadNewChunks();
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        lightingShader.use();
-        lightingShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
-        lightingShader.setVec3("lightPos", lightPos);
-        lightingShader.setVec3("viewPos", camera.Position);
+        world->worldShader.use();
+        world->worldShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);
+        world->worldShader.setVec3("lightPos", lightPos);
+        world->worldShader.setVec3("viewPos", camera.Position);
 
         // view/projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.01f, 300.0f);
         glm::mat4 view = camera.GetViewMatrix();
-        lightingShader.setMat4("projection", projection);
-        lightingShader.setMat4("view", view);
+        world->worldShader.setMat4("projection", projection);
+        world->worldShader.setMat4("view", view);
 
-        // world transformation
-        glm::mat4 model = glm::mat4(1.0f);
-        lightingShader.setMat4("model", model);
-
-        for (auto& chunk : world->chunks) {
-            chunk.second.drawChunk(&lightingShader);
-        }
+        world->drawChunks();
 
         light.drawLight(projection, view);
 
