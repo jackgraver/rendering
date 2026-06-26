@@ -19,7 +19,7 @@ class World;
 
 class World {
 public:
-    static constexpr int LOAD_RADIUS = 8;
+    static constexpr int LOAD_RADIUS = 16;
 
     World();
     ~World();
@@ -28,9 +28,8 @@ public:
     World(World&&) = delete;
     World& operator=(World&&) = delete;
 
-    void requestChunks();
-    void processNewChunks();
-    void loadNewChunks();
+    void requestChunks(const glm::vec3& playerPosition);
+
 
     // Draws all chunks loaded into memory and within player range.
     // - Should simple call chunk draw calls for each chunk.
@@ -47,8 +46,8 @@ public:
     Shader worldShader;
 
 private:
-    static constexpr std::size_t kMaxChunkIntegrationsPerFrame = 4;
-    static constexpr std::size_t kMaxMeshResultsPerFrame = 4;
+    static constexpr std::size_t kMaxChunkIntegrationsPerFrame = 2;
+    static constexpr std::size_t kMaxMeshResultsPerFrame = 2;
     static constexpr std::size_t kMaxGpuUploadsPerFrame = 2;
 
     enum class WorkerJobType {
@@ -66,6 +65,14 @@ private:
         std::vector<float> vertices;
     };
 
+    struct LoadNewChunksStats {
+        std::size_t appliedMeshResults = 0;
+        std::size_t uploadedMeshes = 0;
+        double gpuUploadMs = 0.0;
+    };
+
+    std::size_t processNewChunks();
+    LoadNewChunksStats loadNewChunks();
     void workerLoop();
     void enqueueMeshJob(const Coords& coords);
 

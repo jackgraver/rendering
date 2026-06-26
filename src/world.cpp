@@ -1,14 +1,53 @@
 #include "world.h"
 
+#include <chrono>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
 
+#include <chrono>
+#include <iostream>
+
+
 namespace {
 constexpr int kWorldChunkHeight = 4;
+constexpr double kSlowStreamingStepMs = 6.0;
+constexpr double kSlowGpuUploadMs = 3.0;
+constexpr double kSlowWorkerJobMs = 8.0;
+
+using Clock = std::chrono::steady_clock;
+
+std::mutex gDebugLogMutex;
 
 bool isChunkPositionInBounds(const glm::ivec3& chunkPosition) {
     return chunkPosition.y >= 0 && chunkPosition.y < kWorldChunkHeight;
+}
+
+Coords worldPositionToChunkCoords(const glm::vec3& worldPosition) {
+    return Coords(
+        static_cast<int>(std::floor(worldPosition.x / CHUNK_WORLD_WIDTH)),
+        static_cast<int>(std::floor(worldPosition.y / CHUNK_WORLD_HEIGHT)),
+        static_cast<int>(std::floor(worldPosition.z / CHUNK_WORLD_DEPTH))
+    );
+}
+
+double elapsedMs(const Clock::time_point& start, const Clock::time_point& end) {
+    return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+std::string formatCoords(const Coords& coords) {
+    std::ostringstream stream;
+    stream << '(' << coords.x() << ", " << coords.y() << ", " << coords.z() << ')';
+    return stream.str();
+}
+
+void logStreamingDebug(const std::string& message) {
+    std::lock_guard<std::mutex> lock(gDebugLogMutex);
+    std::cout << message << std::endl;
 }
 }
 
@@ -71,7 +110,19 @@ World::~World() {
         workerThread.join();
 }
 
-void World::requestChunks() {
+void World::requestChunks(const glm::vec3& playerPosition) {
+    const auto requestStart = Clock::now();
+
+    playerChunk = worldPositionToChunkCoords(playerPosition);
+
+    const auto processStart = Clock::now();
+    const std::size_t processedChunks = processNewChunks();
+    const auto processEnd = Clock::now();
+
+    const auto loadStart = Clock::now();
+    const LoadNewChunksStats loadStats = loadNewChunks();
+    const auto loadEnd = Clock::now();
+
     centerChunk = playerChunk;
 
     const int minX = centerChunk.x() - LOAD_RADIUS;
@@ -98,19 +149,38 @@ void World::requestChunks() {
         }
     }
 
-    if (jobsToQueue.empty())
-        return;
+    const std::size_t queuedJobs = jobsToQueue.size();
 
-    {
+    if (!jobsToQueue.empty()) {
         std::lock_guard<std::mutex> lock(jobsMutex);
         for (WorkerJob& job : jobsToQueue)
             pendingJobs.push(std::move(job));
+
+        jobsCondition.notify_one();
     }
 
-    jobsCondition.notify_one();
+    const auto requestEnd = Clock::now();
+    const double processMs = elapsedMs(processStart, processEnd);
+    const double loadMs = elapsedMs(loadStart, loadEnd);
+    const double totalMs = elapsedMs(requestStart, requestEnd);
+
+    if (totalMs >= kSlowStreamingStepMs || loadStats.gpuUploadMs >= kSlowGpuUploadMs) {
+        std::ostringstream stream;
+        stream << std::fixed << std::setprecision(2)
+               << "[stream] chunk=" << formatCoords(playerChunk)
+               << " processed=" << processedChunks
+               << " meshResults=" << loadStats.appliedMeshResults
+               << " uploads=" << loadStats.uploadedMeshes
+               << " jobsQueued=" << queuedJobs
+               << " request=" << totalMs << "ms"
+               << " process=" << processMs << "ms"
+               << " load=" << loadMs << "ms"
+               << " upload=" << loadStats.gpuUploadMs << "ms";
+        logStreamingDebug(stream.str());
+    }
 }
 
-void World::processNewChunks() {
+std::size_t World::processNewChunks() {
     std::size_t processedChunks = 0;
 
     while (processedChunks < kMaxChunkIntegrationsPerFrame) {
@@ -138,9 +208,12 @@ void World::processNewChunks() {
 
         ++processedChunks;
     }
+
+    return processedChunks;
 }
 
-void World::loadNewChunks() {
+World::LoadNewChunksStats World::loadNewChunks() {
+    LoadNewChunksStats stats;
     std::size_t appliedMeshResults = 0;
 
     while (appliedMeshResults < kMaxMeshResultsPerFrame) {
@@ -171,6 +244,8 @@ void World::loadNewChunks() {
         ++appliedMeshResults;
     }
 
+    stats.appliedMeshResults = appliedMeshResults;
+
     std::size_t uploadedMeshes = 0;
     while (uploadedMeshes < kMaxGpuUploadsPerFrame) {
         if (pendingGpuUploads.empty())
@@ -188,12 +263,17 @@ void World::loadNewChunks() {
         }
 
         if (chunkToUpload != nullptr) {
+            const auto uploadStart = Clock::now();
             chunkToUpload->uploadMesh();
+            stats.gpuUploadMs += elapsedMs(uploadStart, Clock::now());
             ++uploadedMeshes;
         }
 
         queuedGpuUploads.erase(coords);
     }
+
+    stats.uploadedMeshes = uploadedMeshes;
+    return stats;
 }
 
 void World::drawChunks() {
@@ -222,6 +302,8 @@ void World::workerLoop() {
             pendingJobs.pop();
         }
 
+        const auto jobStart = Clock::now();
+
         // Job is Populate, for a given chunk in job we need to populate its blocks then add to queue for mesh building
         if (job.type == WorkerJobType::Populate) {
             Chunk chunk(this, job.coords.x(), job.coords.y(), job.coords.z());
@@ -229,22 +311,47 @@ void World::workerLoop() {
 
             std::lock_guard<std::mutex> lock(completedMutex);
             populatedChunkResults.push(std::move(chunk));
+
+            const double jobMs = elapsedMs(jobStart, Clock::now());
+            if (jobMs >= kSlowWorkerJobMs) {
+                std::ostringstream stream;
+                stream << std::fixed << std::setprecision(2)
+                       << "[worker] Populate " << formatCoords(job.coords)
+                       << " took " << jobMs << "ms";
+                logStreamingDebug(stream.str());
+            }
             continue;
         }
         // Job is Mesh, for a given chunk in job we need to build its mesh vertices then add to queue for GPU upload
         if (job.type == WorkerJobType::Mesh) {
             MeshResult meshResult;
             meshResult.coords = job.coords;
+
+            Chunk chunkCopy;
             {
                 std::lock_guard<std::mutex> lock(chunksMutex);
                 auto it = chunks.find(job.coords);
+
                 if (it != chunks.end()) {
-                    meshResult.vertices = it->second.buildMeshVertices();
+                    chunkCopy = it->second;
+                } else {
+                    return; // or handle missing chunk
                 }
             }
 
+            meshResult.vertices = chunkCopy.buildMeshVertices();
+
             std::lock_guard<std::mutex> lock(completedMutex);
             meshResults.push(std::move(meshResult));
+        }
+
+        const double jobMs = elapsedMs(jobStart, Clock::now());
+        if (jobMs >= kSlowWorkerJobMs) {
+            std::ostringstream stream;
+            stream << std::fixed << std::setprecision(2)
+                   << "[worker] Mesh " << formatCoords(job.coords)
+                   << " took " << jobMs << "ms";
+            logStreamingDebug(stream.str());
         }
     }
 }

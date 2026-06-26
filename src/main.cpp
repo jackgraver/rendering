@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <cstdlib>
-#include <cmath>
+#include <iomanip>
 #include "world.h"
 
 GLFWwindow* initialize();
@@ -19,7 +19,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
-void updateWorldStreaming();
 
 const unsigned int SCR_WIDTH = 1400;
 const unsigned int SCR_HEIGHT = 800;
@@ -42,6 +41,10 @@ bool pKeyWasPressed = false;
 
 std::unique_ptr<World> world;
 
+namespace {
+constexpr double kSlowFrameMs = 20.0;
+}
+
 int main() {
     GLFWwindow* window = initialize();
     if (window == nullptr) {
@@ -51,14 +54,12 @@ int main() {
     Lighting light;
 
     world = std::make_unique<World>();
-    updateWorldStreaming();
-    world->requestChunks();
-    world->processNewChunks();
-    world->loadNewChunks();
+    world->requestChunks(camera.Position);
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
+    std::cout << "-----------------------" << std::endl;
 
     while (!glfwWindowShouldClose(window)) {
         float currentFrame = static_cast<float>(glfwGetTime());
@@ -81,7 +82,23 @@ int main() {
         world->worldShader.setMat4("projection", projection);
         world->worldShader.setMat4("view", view);
 
+        const double worldUpdateStart = glfwGetTime();
+        world->requestChunks(camera.Position);
+        const double worldUpdateEnd = glfwGetTime();
+
         world->drawChunks();
+        const double worldDrawEnd = glfwGetTime();
+
+        const double worldUpdateMs = (worldUpdateEnd - worldUpdateStart) * 1000.0;
+        const double worldDrawMs = (worldDrawEnd - worldUpdateEnd) * 1000.0;
+        const double worldFrameMs = (worldDrawEnd - worldUpdateStart) * 1000.0;
+
+        if (worldFrameMs >= kSlowFrameMs) {
+            std::cout << std::fixed << std::setprecision(2)
+                      << "[frame] world update=" << worldUpdateMs << "ms"
+                      << " draw=" << worldDrawMs << "ms"
+                      << " total=" << worldFrameMs << "ms" << std::endl;
+        }
 
         light.drawLight(projection, view);
 
@@ -176,23 +193,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-void updateWorldStreaming() {
-    if (!world)
-        return;
 
-    const Coords currentChunk(
-        static_cast<int>(std::floor(camera.Position.x / CHUNK_WORLD_WIDTH)),
-        static_cast<int>(std::floor(camera.Position.y / CHUNK_WORLD_HEIGHT)),
-        static_cast<int>(std::floor(camera.Position.z / CHUNK_WORLD_DEPTH))
-    );
-
-    world->playerChunk = currentChunk;
-
-    // if (world->chunks.empty() || world->centerChunk != currentChunk) {
-    //     world->centerChunk = currentChunk;
-    //     world->updateLoadedChunks();
-    // }
-}
 
 // glfw: whenever the mouse moves, this callback is called
 // -------------------------------------------------------

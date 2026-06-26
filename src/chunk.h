@@ -87,8 +87,8 @@ private:
     const Block* getBlock(const glm::ivec3& localPos) const;
 
     World* world = nullptr;
-    unsigned int VAO = 0;
-    unsigned int VBO = 0;
+    unsigned int chunkVAO = 0;
+    unsigned int chunkVBO = 0;
     bool gpuUploadDirty = false;
     int vertexCount = 0;
     std::vector<float> meshVertices;

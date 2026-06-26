@@ -108,14 +108,14 @@ void Chunk::uploadMesh() {
     if (!gpuUploadDirty)
         return;
 
-    if (VAO == 0)
-        glGenVertexArrays(1, &VAO);
+    if (chunkVAO == 0)
+        glGenVertexArrays(1, &chunkVAO);
 
-    if (VBO == 0)
-        glGenBuffers(1, &VBO);
+    if (chunkVBO == 0)
+        glGenBuffers(1, &chunkVBO);
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindVertexArray(chunkVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, chunkVBO);
 
     glBufferData(
         GL_ARRAY_BUFFER,
@@ -134,24 +134,24 @@ void Chunk::uploadMesh() {
 }
 
 void Chunk::drawChunk(Shader* shader) {
-    if (gpuUploadDirty || vertexCount == 0 || VAO == 0)
+    if (gpuUploadDirty || vertexCount == 0 || chunkVAO == 0)
         return;
 
     shader->setVec3("objectColor", blockTypeColor(DIRT));
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(chunkVAO);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 }
 
 void Chunk::releaseGpuResources() {
-    if (VAO != 0)
-        glDeleteVertexArrays(1, &VAO);
+    if (chunkVAO != 0)
+        glDeleteVertexArrays(1, &chunkVAO);
 
-    if (VBO != 0)
-        glDeleteBuffers(1, &VBO);
+    if (chunkVBO != 0)
+        glDeleteBuffers(1, &chunkVBO);
 
-    VAO = 0;
-    VBO = 0;
+    chunkVAO = 0;
+    chunkVBO = 0;
 }
 
 bool Chunk::isLocalPositionInBounds(const glm::ivec3& localPos) const {
