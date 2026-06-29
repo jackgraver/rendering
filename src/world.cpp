@@ -134,6 +134,32 @@ void World::requestChunks(const glm::vec3& playerPosition) {
 
     std::vector<WorkerJob> jobsToQueue;
 
+    std::vector<Chunk> unloadQueue;
+    {
+        std::lock_guard<std::mutex> lock(chunksMutex);
+
+        for (auto it = chunks.begin(); it != chunks.end(); ) {
+            auto& pos = it->first;
+            auto& chunk = it->second;
+
+            if (pos.x() > maxX || pos.x() < minX ||
+                pos.y() > maxY || pos.y() < minY ||
+                pos.z() > maxZ || pos.z() < minZ) {
+
+                unloadQueue.push_back(std::move(chunk));
+                it = chunks.erase(it); // returns next valid iterator
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    // queue jobs after releasing lock
+    for (auto& chunk : unloadQueue) {
+        // jobsToQueue.push_back({WorkerJobType::Delete, pos});
+        chunk.releaseGpuResources();
+    }
+
     for (int x = minX; x <= maxX; ++x) {
         for (int y = minY; y <= maxY; ++y) {
             for (int z = minZ; z <= maxZ; ++z) {
@@ -289,6 +315,7 @@ void World::workerLoop() {
     // Background infinite check loop
     while (true) {
         // Current job
+        std::cout << pendingJobs.size() << std::endl;
         WorkerJob job;
         // Scope block on lock, find current job if any exist or non already executing
         {
@@ -335,7 +362,7 @@ void World::workerLoop() {
                 if (it != chunks.end()) {
                     chunkCopy = it->second;
                 } else {
-                    return; // or handle missing chunk
+                    continue; // or handle missing chunk
                 }
             }
 

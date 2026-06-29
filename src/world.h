@@ -53,6 +53,7 @@ private:
     enum class WorkerJobType {
         Populate,
         Mesh,
+        Delete,
     };
 
     struct WorkerJob {

@@ -18,42 +18,34 @@ void Chunk::setWorld(World* world) {
 void Chunk::populateChunk() {
     blocks.clear();
 
-    constexpr float baseHeightWorld = 2.4f;
-    constexpr float broadHillFrequency = 0.08f;
-    constexpr float broadHillAmplitude = 1.6f;
-    constexpr float detailFrequency = 0.35f;
-    constexpr float detailAmplitude = 0.35f;
+    constexpr float baseHeight = 4.0f;
+    constexpr float heightScale = 3.0f;
 
     for (unsigned x = 0; x < CHUNK_WIDTH; x++) {
         for (unsigned z = 0; z < CHUNK_DEPTH; z++) {
-            const float worldX = (static_cast<float>(chunkPos.x * static_cast<int>(CHUNK_WIDTH)) + static_cast<float>(x)) * BLOCK_SIZE;
-            const float worldZ = (static_cast<float>(chunkPos.z * static_cast<int>(CHUNK_DEPTH)) + static_cast<float>(z)) * BLOCK_SIZE;
+            int worldX = chunkPos.x * static_cast<int>(CHUNK_WIDTH) + static_cast<int>(x);
+            int worldZ = chunkPos.z * static_cast<int>(CHUNK_DEPTH) + static_cast<int>(z);
 
-            const float broadNoise = perlin(worldX * broadHillFrequency, worldZ * broadHillFrequency);
-
-            float detailNoise = 0.0f;
+            float noise = 0.0f;
             float amplitude = 1.0f;
-            float frequency = detailFrequency;
+            float frequency = 0.05f;
             float maxAmplitude = 0.0f;
 
             for (int octave = 0; octave < 4; octave++) {
-                detailNoise += perlin(worldX * frequency, worldZ * frequency) * amplitude;
+                noise += perlin(worldX * frequency, worldZ * frequency) * amplitude;
                 maxAmplitude += amplitude;
                 amplitude *= 0.5f;
                 frequency *= 2.0f;
             }
 
-            detailNoise /= maxAmplitude; // roughly [-1, 1]
+            noise /= maxAmplitude; // roughly [-1, 1]
 
-            const float terrainHeightWorld = baseHeightWorld
-                + (broadNoise * broadHillAmplitude)
-                + (detailNoise * detailAmplitude);
+            int terrainHeight = static_cast<int>(baseHeight + noise * heightScale);
 
             for (unsigned y = 0; y < CHUNK_HEIGHT; y++) {
-                const int worldBlockY = chunkPos.y * static_cast<int>(CHUNK_HEIGHT) + static_cast<int>(y);
-                const float worldY = static_cast<float>(worldBlockY) * BLOCK_SIZE;
+                int worldY = chunkPos.y * static_cast<int>(CHUNK_HEIGHT) + static_cast<int>(y);
 
-                if (worldY <= terrainHeightWorld) {
+                if (worldY <= terrainHeight) {
                     auto type = DIRT;
                     if (rand() % 100 < 30) {
                         type = STONE;
