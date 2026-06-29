@@ -55,13 +55,14 @@ struct FaceData {
 
 extern const FaceData faces[6];
 
-inline void pushVertex(std::vector<float>& vertices, const glm::vec3& position, const glm::vec3& normal) {
+inline void pushVertex(std::vector<float>& vertices, const glm::vec3& position, const glm::vec3& normal, float color) {
     vertices.push_back(position.x);
     vertices.push_back(position.y);
     vertices.push_back(position.z);
     vertices.push_back(normal.x);
     vertices.push_back(normal.y);
     vertices.push_back(normal.z);
+    vertices.push_back(color);
 }
 
 class Chunk {

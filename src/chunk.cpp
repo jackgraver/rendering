@@ -54,7 +54,11 @@ void Chunk::populateChunk() {
                 const float worldY = static_cast<float>(worldBlockY) * BLOCK_SIZE;
 
                 if (worldY <= terrainHeightWorld) {
-                    blocks.emplace(glm::ivec3(x, y, z), Block(DIRT));
+                    auto type = DIRT;
+                    if (rand() % 100 < 30) {
+                        type = STONE;
+                    }
+                    blocks.emplace(glm::ivec3(x, y, z), type);
                 }
             }
         }
@@ -90,7 +94,7 @@ std::vector<float> Chunk::buildMeshVertices() const {
 
             glm::vec3 base = chunkOffset + (glm::vec3(localPos) * BLOCK_SIZE);
             for (int i = 0; i < 6; i++) {
-                pushVertex(vertices, base + (face.vertices[i] * BLOCK_SIZE), face.normal);
+                pushVertex(vertices, base + (face.vertices[i] * BLOCK_SIZE), face.normal, blockTypeColor(block.type));
             }
         }
     }
@@ -124,11 +128,14 @@ void Chunk::uploadMesh() {
         GL_STATIC_DRAW
     );
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
     gpuUploadDirty = false;
 }
@@ -137,7 +144,7 @@ void Chunk::drawChunk(Shader* shader) {
     if (gpuUploadDirty || vertexCount == 0 || chunkVAO == 0)
         return;
 
-    shader->setVec3("objectColor", blockTypeColor(DIRT));
+    // shader->setVec3("objectColor", blockTypeColor(DIRT));
 
     glBindVertexArray(chunkVAO);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);

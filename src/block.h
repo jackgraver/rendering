@@ -9,17 +9,20 @@ enum BLOCK_TYPE {
     STONE,
 };
 
-inline glm::vec3 blockTypeColor(BLOCK_TYPE type) {
+inline float blockTypeColor(BLOCK_TYPE type) {
     switch (type) {
         case AIR:
-            return glm::vec3(1.0f, 1.0f, 1.0f);
+            // return glm::vec3(1.0f, 1.0f, 1.0f);
+            return 1.0f;
         case DIRT:
-            return glm::vec3(0.39f, 0.25f, 0.09f);
+            // return glm::vec3(0.39f, 0.25f, 0.09f);
+            return 2.0f;
         case STONE:
-            return glm::vec3(0.66f, 0.66f, 0.66f);
+            // return glm::vec3(0.66f, 0.66f, 0.66f);
+            return 3.0f;
     }
 
-    return glm::vec3(1.0f, 1.0f, 1.0f);
+    return 1.0f;
 }
 
 struct Block {
